@@ -17,9 +17,17 @@ pub struct StmtCache<DB: Backend, S> {
     cache: HashMap<StatementCacheKey<DB>, S>,
 }
 
+
+#[cfg(not(target_arch = "wasm32"))]
 type PrepareFuture<'a, F, S> = future::Either<
     future::Ready<QueryResult<(MaybeCached<'a, S>, F)>>,
     future::BoxFuture<'a, QueryResult<(MaybeCached<'a, S>, F)>>,
+>;
+
+#[cfg(target_arch = "wasm32")]
+type PrepareFuture<'a, F, S> = future::Either<
+    future::Ready<QueryResult<(MaybeCached<'a, S>, F)>>,
+    future::LocalBoxFuture<'a, QueryResult<(MaybeCached<'a, S>, F)>>,
 >;
 
 /// If the statement is not already prepared in cache, the future 
@@ -27,6 +35,7 @@ type PrepareFuture<'a, F, S> = future::Either<
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 pub trait PrepareCallback<S, M>: Sized {
+    /// Prepare a SQL statement
     async fn prepare(
         self,
         sql: &str,
@@ -34,6 +43,16 @@ pub trait PrepareCallback<S, M>: Sized {
         is_for_cache: PrepareForCache,
     ) -> QueryResult<(S, Self)>;
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+fn box_future<'a, F: future::Future + Send>(f: F) -> future::BoxFuture<'_, F::Output> + 'a {
+    f.boxed()
+}
+ 
+#[cfg(target_arch = "wasm32")]
+fn box_future<'a, F: future::Future + 'a>(f: F) -> future::LocalBoxFuture<'a, F::Output> {
+    f.boxed_local()
+} 
 
 impl<S, DB: Backend> StmtCache<DB, S> {
     /// Create a new, empty statement cache
@@ -69,9 +88,8 @@ impl<S, DB: Backend> StmtCache<DB, S> {
                     .prepare(&sql, &metadata, PrepareForCache::No)
                     .await?;
                 Ok((MaybeCached::CannotCache(stmt.0), stmt.1))
-            }
-            .boxed();
-            return future::Either::Right(f);
+            };
+            return future::Either::Right(box_future(f));
         }
 
         match self.cache.entry(cache_key) {
@@ -91,9 +109,8 @@ impl<S, DB: Backend> StmtCache<DB, S> {
                         .await?;
 
                     Ok((MaybeCached::Cached(entry.insert(statement.0)), statement.1))
-                }
-                .boxed();
-                future::Either::Right(f)
+                };
+                future::Either::Right(box_future(f))
             }
         }
     }
