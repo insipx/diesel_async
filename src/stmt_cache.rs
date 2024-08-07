@@ -1,3 +1,6 @@
+//! Cache prepared statements for SQL backends
+//! Useful when implementing a third-party backend
+
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -8,6 +11,7 @@ use diesel::connection::InstrumentationEvent;
 use diesel::QueryResult;
 use futures_util::{future, FutureExt};
 
+/// The statement cache
 #[derive(Default)]
 pub struct StmtCache<DB: Backend, S> {
     cache: HashMap<StatementCacheKey<DB>, S>,
@@ -18,6 +22,8 @@ type PrepareFuture<'a, F, S> = future::Either<
     future::BoxFuture<'a, QueryResult<(MaybeCached<'a, S>, F)>>,
 >;
 
+/// If the statement is not already prepared in cache, the future 
+/// corresponding with this callback is invoked in order to prepare the statement.
 #[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
 pub trait PrepareCallback<S, M>: Sized {
@@ -30,12 +36,14 @@ pub trait PrepareCallback<S, M>: Sized {
 }
 
 impl<S, DB: Backend> StmtCache<DB, S> {
+    /// Create a new, empty statement cache
     pub fn new() -> Self {
         Self {
             cache: HashMap::new(),
         }
     }
 
+    /// Cache a statemnt
     pub fn cached_prepared_statement<'a, F>(
         &'a mut self,
         cache_key: StatementCacheKey<DB>,

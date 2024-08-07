@@ -94,8 +94,8 @@ pub mod pg;
 ))]
 pub mod pooled_connection;
 mod run_query_dsl;
-#[cfg(any(feature = "postgres", feature = "mysql"))]
-mod stmt_cache;
+#[cfg(any(feature = "postgres", feature = "mysql", feature = "stmt-cache"))]
+pub mod stmt_cache;
 #[cfg(feature = "sync-connection-wrapper")]
 pub mod sync_connection_wrapper;
 mod transaction_manager;

@@ -64,6 +64,7 @@ r2d2 = ["diesel/r2d2"]
 bb8 = ["dep:bb8"]
 mobc = ["dep:mobc"]
 deadpool = ["dep:deadpool"]
+stmt-cache = []
 
 [[test]]
 name = "integration_tests"
