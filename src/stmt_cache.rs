@@ -76,7 +76,7 @@ impl<S, DB: Backend> StmtCache<DB, S> {
         S: Send,
         DB::QueryBuilder: Default,
         DB::TypeMetadata: Clone + Send + Sync,
-        F: PrepareCallback<S, DB::TypeMetadata> + Send + 'a,
+        F: PrepareCallback<S, DB::TypeMetadata> + 'a,
         StatementCacheKey<DB>: Hash + Eq,
     {
         use std::collections::hash_map::Entry::{Occupied, Vacant};
