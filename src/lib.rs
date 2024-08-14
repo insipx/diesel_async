@@ -67,6 +67,7 @@
 //! ```
 
 #![warn(missing_docs)]
+#![cfg_attr(target_arch = "wasm32", allow(unused))]
 
 use diesel::backend::Backend;
 use diesel::connection::Instrumentation;
@@ -100,6 +101,11 @@ pub mod stmt_cache;
 pub mod sync_connection_wrapper;
 mod transaction_manager;
 
+#[cfg(target_arch = "wasm32")]
+mod wasm;
+#[cfg(target_arch = "wasm32")]
+pub use wasm::*;
+
 #[cfg(feature = "mysql")]
 #[doc(inline)]
 pub use self::mysql::AsyncMysqlConnection;
@@ -130,8 +136,8 @@ pub trait SimpleAsyncConnection {
 /// This trait represents a n async database connection. It can be used to query the database through
 /// the query dsl provided by diesel, custom extensions or raw sql queries. It essentially mirrors
 /// the sync diesel [`Connection`](diesel::connection::Connection) implementation
-#[cfg_attr(target_arch = "wasm32", async_trait::async_trait(?Send))]
-#[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
+#[cfg(not(target_arch = "wasm32"))]
+#[async_trait::async_trait]
 pub trait AsyncConnection: SimpleAsyncConnection + Sized + Send {
     /// The future returned by `AsyncConnection::execute`
     type ExecuteFuture<'conn, 'query>: Future<Output = QueryResult<usize>> + Send;

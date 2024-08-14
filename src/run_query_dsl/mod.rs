@@ -66,6 +66,7 @@ pub mod methods {
     /// to call `load` from generic code.
     ///
     /// [`RunQueryDsl`]: super::RunQueryDsl
+    #[cfg(not(target_arch = "wasm32"))]
     pub trait LoadQuery<'query, Conn: AsyncConnection, U> {
         /// The future returned by [`LoadQuery::internal_load`]
         type LoadFuture<'conn>: Future<Output = QueryResult<Self::Stream<'conn>>> + Send
@@ -79,6 +80,8 @@ pub mod methods {
         /// Load this query
         fn internal_load(self, conn: &mut Conn) -> Self::LoadFuture<'_>;
     }
+    #[cfg(target_arch = "wasm32")]
+    pub use crate::wasm::LoadQuery;
 
     impl<'query, Conn, DB, T, U, ST> LoadQuery<'query, Conn, U> for T
     where
@@ -111,6 +114,7 @@ pub mod methods {
     }
 
     #[allow(clippy::type_complexity)]
+    #[cfg(not(target_arch = "wasm32"))]
     fn map_result_stream_future<'s, 'a, U, S, R, DB, ST>(
         stream: S,
     ) -> stream::Map<S, fn(QueryResult<R>) -> QueryResult<U>>
@@ -124,6 +128,7 @@ pub mod methods {
         stream.map(map_row_helper::<_, DB, U, ST>)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn map_row_helper<'a, R, DB, U, ST>(row: QueryResult<R>) -> QueryResult<U>
     where
         U: FromSqlRow<ST, DB>,
@@ -132,6 +137,9 @@ pub mod methods {
     {
         U::build_from_row(&row?).map_err(diesel::result::Error::DeserializationError)
     }
+
+    #[cfg(target_arch = "wasm32")]
+    pub use crate::wasm::{map_result_stream_future, map_row_helper};
 }
 
 /// The return types produced by the various [`RunQueryDsl`] methods
