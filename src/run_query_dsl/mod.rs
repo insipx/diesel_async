@@ -184,7 +184,7 @@ pub mod return_futures {
 }
 
 /// Methods used to execute queries.
-#[cfg(not(target_arch = "wasm32")]
+#[cfg(not(target_arch = "wasm32"))]
 pub trait RunQueryDsl<Conn>: Sized {
     /// Executes the given command, returning the number of rows affected.
     ///

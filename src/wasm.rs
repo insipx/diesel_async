@@ -13,9 +13,10 @@ use diesel::query_builder::{AsQuery, QueryFragment, QueryId};
 use diesel::result::Error;
 use diesel::row::Row;
 use diesel::{ConnectionResult, QueryResult};
-use futures_util::{stream, Future, Stream, StreamExt};
+use futures_util::{stream, Future, Stream, StreamExt, future, TryStreamExt, TryFutureExt, FutureExt};
 use scoped_futures::{ScopedFutureExt, ScopedLocalBoxFuture};
 use std::fmt::Debug;
+use std::pin::Pin;
 
 #[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
@@ -175,19 +176,18 @@ pub trait RunQueryDsl<Conn>: Sized {
     fn execute<'conn, 'query>(self, conn: &'conn mut Conn) -> Conn::ExecuteFuture<'conn, 'query>
     where
         Conn: AsyncConnection,
-        Self: methods::ExecuteDsl<Conn> + 'query,
+        Self: crate::methods::ExecuteDsl<Conn> + 'query,
     {
-        methods::ExecuteDsl::execute(self, conn)
+        crate::methods::ExecuteDsl::execute(self, conn)
     }
 
     fn load<'query, 'conn, U>(
         self,
         conn: &'conn mut Conn,
-    ) -> return_futures::LoadFuture<'conn, 'query, Self, Conn, U>
+    ) -> crate::return_futures::LoadFuture<'conn, 'query, Self, Conn, U>
     where
-        U,
         Conn: AsyncConnection,
-        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+        Self: crate::run_query_dsl::methods::LoadQuery<'query, Conn, U> + 'query,
     {
         fn collect_result<U, S>(stream: S) -> stream::TryCollect<S, Vec<U>>
         where
@@ -202,7 +202,7 @@ pub trait RunQueryDsl<Conn>: Sized {
     where
         Conn: AsyncConnection,
         U: 'conn,
-        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+        Self: crate::methods::LoadQuery<'query, Conn, U> + 'query,
     {
         self.internal_load(conn)
     }
@@ -210,11 +210,11 @@ pub trait RunQueryDsl<Conn>: Sized {
     fn get_result<'query, 'conn, U>(
         self,
         conn: &'conn mut Conn,
-    ) -> return_futures::GetResult<'conn, 'query, Self, Conn, U>
+    ) -> crate::return_futures::GetResult<'conn, 'query, Self, Conn, U>
     where
-        U 'conn,
+        U: 'conn,
         Conn: AsyncConnection,
-        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+        Self: crate::methods::LoadQuery<'query, Conn, U> + 'query,
     {
         #[allow(clippy::type_complexity)]
         fn get_next_stream_element<S, U>(
@@ -244,11 +244,10 @@ pub trait RunQueryDsl<Conn>: Sized {
     fn get_results<'query, 'conn, U>(
         self,
         conn: &'conn mut Conn,
-    ) -> return_futures::LoadFuture<'conn, 'query, Self, Conn, U>
+    ) -> crate::return_futures::LoadFuture<'conn, 'query, Self, Conn, U>
     where
-        U,
         Conn: AsyncConnection,
-        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+        Self: crate::methods::LoadQuery<'query, Conn, U> + 'query,
     {
         self.load(conn)
     }
@@ -256,12 +255,12 @@ pub trait RunQueryDsl<Conn>: Sized {
     fn first<'query, 'conn, U>(
         self,
         conn: &'conn mut Conn,
-    ) -> return_futures::GetResult<'conn, 'query, diesel::dsl::Limit<Self>, Conn, U>
+    ) -> crate::return_futures::GetResult<'conn, 'query, diesel::dsl::Limit<Self>, Conn, U>
     where
         U: 'conn,
         Conn: AsyncConnection,
         Self: diesel::query_dsl::methods::LimitDsl,
-        diesel::dsl::Limit<Self>: methods::LoadQuery<'query, Conn, U> + 'query,
+        diesel::dsl::Limit<Self>: crate::methods::LoadQuery<'query, Conn, U> + 'query,
     {
         diesel::query_dsl::methods::LimitDsl::limit(self, 1).get_result(conn)
     }
