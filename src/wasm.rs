@@ -1,3 +1,5 @@
+//! Re-Exports of traits for WASM without `Send` bound.
+
 #![allow(missing_docs)]
 use crate::SimpleAsyncConnection;
 use diesel::backend::Backend;
@@ -169,6 +171,101 @@ pub trait TransactionManager<Conn: AsyncConnection> {
     }
 }
 
+pub trait RunQueryDsl<Conn>: Sized {
+    fn execute<'conn, 'query>(self, conn: &'conn mut Conn) -> Conn::ExecuteFuture<'conn, 'query>
+    where
+        Conn: AsyncConnection,
+        Self: methods::ExecuteDsl<Conn> + 'query,
+    {
+        methods::ExecuteDsl::execute(self, conn)
+    }
+
+    fn load<'query, 'conn, U>(
+        self,
+        conn: &'conn mut Conn,
+    ) -> return_futures::LoadFuture<'conn, 'query, Self, Conn, U>
+    where
+        U,
+        Conn: AsyncConnection,
+        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+    {
+        fn collect_result<U, S>(stream: S) -> stream::TryCollect<S, Vec<U>>
+        where
+            S: Stream<Item = QueryResult<U>>,
+        {
+            stream.try_collect()
+        }
+        self.internal_load(conn).and_then(collect_result::<U, _>)
+    }
+
+    fn load_stream<'conn, 'query, U>(self, conn: &'conn mut Conn) -> Self::LoadFuture<'conn>
+    where
+        Conn: AsyncConnection,
+        U: 'conn,
+        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+    {
+        self.internal_load(conn)
+    }
+
+    fn get_result<'query, 'conn, U>(
+        self,
+        conn: &'conn mut Conn,
+    ) -> return_futures::GetResult<'conn, 'query, Self, Conn, U>
+    where
+        U 'conn,
+        Conn: AsyncConnection,
+        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+    {
+        #[allow(clippy::type_complexity)]
+        fn get_next_stream_element<S, U>(
+            stream: S,
+        ) -> future::Map<
+            stream::StreamFuture<Pin<Box<S>>>,
+            fn((Option<QueryResult<U>>, Pin<Box<S>>)) -> QueryResult<U>,
+        >
+        where
+            S: Stream<Item = QueryResult<U>>,
+        {
+            fn map_option_to_result<U, S>(
+                (o, _): (Option<QueryResult<U>>, Pin<Box<S>>),
+            ) -> QueryResult<U> {
+                match o {
+                    Some(s) => s,
+                    None => Err(diesel::result::Error::NotFound),
+                }
+            }
+
+            Box::pin(stream).into_future().map(map_option_to_result)
+        }
+
+        self.load_stream(conn).and_then(get_next_stream_element)
+    }
+
+    fn get_results<'query, 'conn, U>(
+        self,
+        conn: &'conn mut Conn,
+    ) -> return_futures::LoadFuture<'conn, 'query, Self, Conn, U>
+    where
+        U,
+        Conn: AsyncConnection,
+        Self: methods::LoadQuery<'query, Conn, U> + 'query,
+    {
+        self.load(conn)
+    }
+
+    fn first<'query, 'conn, U>(
+        self,
+        conn: &'conn mut Conn,
+    ) -> return_futures::GetResult<'conn, 'query, diesel::dsl::Limit<Self>, Conn, U>
+    where
+        U: 'conn,
+        Conn: AsyncConnection,
+        Self: diesel::query_dsl::methods::LimitDsl,
+        diesel::dsl::Limit<Self>: methods::LoadQuery<'query, Conn, U> + 'query,
+    {
+        diesel::query_dsl::methods::LimitDsl::limit(self, 1).get_result(conn)
+    }
+}
 pub trait LoadQuery<'query, Conn: AsyncConnection, U> {
     /// The future returned by [`LoadQuery::internal_load`]
     type LoadFuture<'conn>: Future<Output = QueryResult<Self::Stream<'conn>>>

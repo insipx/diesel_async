@@ -184,6 +184,7 @@ pub mod return_futures {
 }
 
 /// Methods used to execute queries.
+#[cfg(not(target_arch = "wasm32")]
 pub trait RunQueryDsl<Conn>: Sized {
     /// Executes the given command, returning the number of rows affected.
     ///
@@ -648,6 +649,8 @@ pub trait RunQueryDsl<Conn>: Sized {
         diesel::query_dsl::methods::LimitDsl::limit(self, 1).get_result(conn)
     }
 }
+#[cfg(target_arch = "wasm32")]
+pub use crate::wasm::RunQueryDsl;
 
 impl<T, Conn> RunQueryDsl<Conn> for T {}
 
