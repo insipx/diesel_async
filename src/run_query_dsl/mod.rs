@@ -42,6 +42,7 @@ pub mod methods {
             Self: 'query;
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     impl<Conn, DB, T> ExecuteDsl<Conn, DB> for T
     where
         Conn: AsyncConnection<Backend = DB>,
@@ -59,6 +60,24 @@ pub mod methods {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    impl<Conn, DB, T> ExecuteDsl<Conn, DB> for T
+    where
+        Conn: AsyncConnection<Backend = DB>,
+        DB: Backend,
+        T: QueryFragment<DB> + QueryId,
+    {
+        fn execute<'conn, 'query>(
+            query: Self,
+            conn: &'conn mut Conn,
+        ) -> Conn::ExecuteFuture<'conn, 'query>
+        where
+            Self: 'query,
+        {
+            conn.execute_returning_count(query)
+        }
+    }
+    
     /// The `load` method
     ///
     /// This trait should not be relied on directly by most apps. Its behavior is

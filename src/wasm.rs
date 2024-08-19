@@ -18,7 +18,6 @@ use scoped_futures::{ScopedFutureExt, ScopedLocalBoxFuture};
 use std::fmt::Debug;
 use std::pin::Pin;
 
-#[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
 pub trait AsyncConnection: SimpleAsyncConnection + Sized {
     type ExecuteFuture<'conn, 'query>: Future<Output = QueryResult<usize>>;
@@ -112,7 +111,6 @@ pub trait AsyncConnection: SimpleAsyncConnection + Sized {
     fn set_instrumentation(&mut self, instrumentation: impl Instrumentation);
 }
 
-#[cfg(target_arch = "wasm32")]
 #[async_trait::async_trait(?Send)]
 pub trait TransactionManager<Conn: AsyncConnection> {
     type TransactionStateData;
@@ -301,3 +299,5 @@ where
 {
     U::build_from_row(&row?).map_err(diesel::result::Error::DeserializationError)
 }
+
+
